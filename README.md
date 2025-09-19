@@ -56,7 +56,7 @@ pip install -r requirements.txt
 ```
 4. Run the FastAPI Server
 ```bash
-uvicorn secure_backend:app --reload
+uvicorn Main:app --reload
 ```
 ### Frontend (React)
 1. Navigate to the frontend folder:
@@ -70,6 +70,10 @@ npm install
 3. Start the development server:
 ```bash
 npm start
+```
+4. run and start your local version
+```bash
+npm run dev
 ```
 ## Usage
 
