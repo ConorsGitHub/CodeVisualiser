@@ -33,7 +33,7 @@ export default function CodeVisualizer() {
     setSteps([]);
 
     try {
-      const res = await fetch("http://localhost:8000/run", {
+      const res = await fetch("https://codevisualiser.onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
