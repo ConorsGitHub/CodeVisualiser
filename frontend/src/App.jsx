@@ -124,8 +124,7 @@ export default function CodeVisualizer() {
       </div>
 
       <div style={styles.main}>
-        {/* Fallback */}
-        <div style={{ color: "lime" }}>Hello World</div>
+
 
         {/* Editor Panel */}
         <div style={styles.editorContainer}>
