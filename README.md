@@ -14,8 +14,9 @@ It allows users to execute Python code, highlighting the execution line by line,
 
 ## Project Structure
 - CodeVisualiser/
-    - venv/
+    - backend/
         - Main.py (Main API server)
+        - test_request.py (loads initial code to site)
         - requirements.txt (Python dependencies)
     - frontend/ (React frontend)
         - package.json (Node dependencies)
