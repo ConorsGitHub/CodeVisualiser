@@ -17,9 +17,9 @@ app = FastAPI(title="Secure Python Execution Visualizer API")
 # CORS settings (restrict origins in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://codevisualiser.com"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["POST"],
     allow_headers=["*"],
 )
 
