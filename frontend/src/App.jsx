@@ -47,7 +47,7 @@ export default function CodeVisualizer() {
     setSteps([]);
 
     try {
-      const res = await fetch("https://codevisualiser.com/run", {
+      const res = await fetch("https://codevisualiser.onrender.com/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
