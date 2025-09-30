@@ -25,6 +25,7 @@ app.add_middleware(
 # Pydantic Models
 class CodeRequest(BaseModel):
     code: str
+    step: Optional[int] = None  # optional specific step
 
 
 class ExecutionStep(BaseModel):
@@ -66,6 +67,8 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
         "list": list,
         "dict": dict,
         "enumerate": enumerate,
+        "__build_class__": __build_class__,
+        "__name__": __name__
     }
 
     # Tracer function
@@ -76,9 +79,12 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
         if event == "line":
             lineno = frame.f_lineno
             line_text = code_lines[lineno - 1] if 0 <= lineno - 1 < len(code_lines) else ""
+            # Filter out dunder variables & internals
             local_vars = {
-                k: repr(v)[:200] for k, v in frame.f_locals.items()
-                if k not in ("output_buffer", "__builtins__")
+                k: repr(v)[:200]
+                for k, v in frame.f_locals.items()
+                if not (k.startswith("__") and k.endswith("__"))
+                   and k not in ("output_buffer", "__builtins__")
             }
             current_value = output_buffer.getvalue()
             new_output = current_value[last_output_pos:]
@@ -95,6 +101,7 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
             last_output_pos = len(current_value)
             if steps:
                 steps[-1].output = (steps[-1].output or "") + (new_output or "")
+
         return tracer
 
     try:
@@ -105,7 +112,6 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
         sys.settrace(None)
     except Exception as e:
         sys.settrace(None)
-        # Add error to last step output if any, else as overall error
         if steps:
             steps[-1].output = (steps[-1].output or "") + f"\nError: {type(e).__name__} - {str(e)}"
         else:
@@ -115,11 +121,11 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
     conn.close()
 
 
-def run_code(code: str) -> CodeResponse:
+def run_code(code: str, step: Optional[int] = None) -> CodeResponse:
     parent_conn, child_conn = multiprocessing.Pipe()
     process = multiprocessing.Process(target=run_in_process, args=(code, child_conn))
     process.start()
-    process.join(timeout=2)
+    process.join(timeout=4)
 
     if process.is_alive():
         process.terminate()
@@ -130,10 +136,17 @@ def run_code(code: str) -> CodeResponse:
     except EOFError:
         return CodeResponse(steps=[], error="Execution failed unexpectedly")
 
+    # If a specific step is requested, return only that step
+    if step is not None:
+        if 0 <= step < len(steps):
+            steps = [steps[step]]
+        else:
+            return CodeResponse(steps=[], error=f"Step {step} out of range")
+
     return CodeResponse(steps=steps, error=error_msg)
 
 
 # API Endpoint
 @app.post("/run", response_model=CodeResponse)
 async def execute_code(request: CodeRequest) -> CodeResponse:
-    return run_code(request.code)
+    return run_code(request.code, request.step)
