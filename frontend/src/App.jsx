@@ -4,7 +4,6 @@ import Editor from "@monaco-editor/react";
 const SPEED_MAP = { slow: 1000, medium: 500, fast: 200 };
 
 export default function CodeVisualizer() {
-  // State Hooks
   const [code, setCode] = useState(`for i in range(3):\n    print(i)\nprint("done")`);
   const [steps, setSteps] = useState([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -12,20 +11,35 @@ export default function CodeVisualizer() {
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState("medium");
 
-  const [execFlex, setExecFlex] = useState(4);
-  const [varsFlex, setVarsFlex] = useState(3);
-  const [outputFlex, setOutputFlex] = useState(3);
+  // Scroll-to-current toggle
+  const [followCurrent, setFollowCurrent] = useState(true);
 
-  // Refs
+  // Adjusted flex: more space to execution viewer
+  const execFlex = 5;
+  const varsFlex = 2;
+  const outputFlex = 3;
+
   const intervalRef = useRef(null);
-  const draggingRef = useRef(null);
-  const startYRef = useRef(0);
-  const startFlexRef = useRef(0);
-
-  const stepInterval = SPEED_MAP[speed] || 500;
   const currentVars = steps[currentStep]?.variables || {};
 
-  // Code Execution
+  // Refs for execution lines
+  const lineRefs = useRef([]);
+
+  // Scroll execution box to current line if toggle is on
+  useEffect(() => {
+    if (!followCurrent) return;
+    const lineEl = lineRefs.current[currentStep];
+    if (lineEl) {
+      lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentStep, followCurrent]);
+
+  const accumulatedOutput = steps
+    .slice(0, currentStep + 1)
+    .map((s) => s.output)
+    .filter(Boolean)
+    .join("");
+
   const runCode = async () => {
     setRunning(true);
     setPaused(false);
@@ -33,7 +47,7 @@ export default function CodeVisualizer() {
     setSteps([]);
 
     try {
-      const res = await fetch("https://codevisualiser.onrender.com/run", {
+      const res = await fetch("https://codevisualiser.com/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
@@ -47,9 +61,8 @@ export default function CodeVisualizer() {
   };
 
   const togglePause = () => {
-    if (paused) {
-      setPaused(false);
-    } else {
+    if (paused) setPaused(false);
+    else {
       clearInterval(intervalRef.current);
       setPaused(true);
     }
@@ -63,60 +76,22 @@ export default function CodeVisualizer() {
     setSteps([]);
   };
 
-  // Step Interval Effect
+  // Step interval effect
   useEffect(() => {
     if (!running || paused || steps.length === 0) return;
 
     intervalRef.current = setInterval(() => {
       setCurrentStep((prev) => {
         if (prev + 1 < steps.length) return prev + 1;
-
         clearInterval(intervalRef.current);
         setRunning(false);
         return prev;
       });
-    }, stepInterval);
+    }, SPEED_MAP[speed] || 500);
 
     return () => clearInterval(intervalRef.current);
-  }, [running, paused, steps, stepInterval]);
+  }, [running, paused, steps, speed]);
 
-  // Drag & Resize Panels
-  const startDrag = (panel, e) => {
-    e.preventDefault();
-    draggingRef.current = panel;
-    startYRef.current = e.clientY;
-    startFlexRef.current = panel === "exec" ? execFlex : varsFlex;
-
-    const onMouseMove = (eMove) => {
-      const container = document.getElementById("rightPanel");
-      if (!container) return;
-      const containerHeight = container.clientHeight;
-      const deltaY = eMove.clientY - startYRef.current;
-      const totalFlex = execFlex + varsFlex + outputFlex;
-      const deltaFlex = (deltaY / containerHeight) * totalFlex;
-
-      if (draggingRef.current === "exec") setExecFlex(Math.max(1, startFlexRef.current + deltaFlex));
-      if (draggingRef.current === "vars") setVarsFlex(Math.max(1, startFlexRef.current + deltaFlex));
-    };
-
-    const onMouseUp = () => {
-      draggingRef.current = null;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  };
-
-  // Derived Outputs
-  const accumulatedOutput = steps
-    .slice(0, currentStep + 1)
-    .map((s) => s.output)
-    .filter(Boolean)
-    .join("");
-
-  // Render
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -124,8 +99,6 @@ export default function CodeVisualizer() {
       </div>
 
       <div style={styles.main}>
-
-
         {/* Editor Panel */}
         <div style={styles.editorContainer}>
           <Editor
@@ -154,47 +127,84 @@ export default function CodeVisualizer() {
         </div>
 
         {/* Right Panel */}
-        <div id="rightPanel" style={styles.rightPanel}>
+        <div style={styles.rightPanel}>
           {/* Execution Viewer */}
           <div style={{ ...styles.panel, flex: execFlex }}>
-            <h3 style={styles.panelTitle}>Execution Viewer</h3>
-            <div style={styles.codeLines}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={styles.panelTitle}>Execution Viewer</h3>
+              <label style={{ fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={followCurrent}
+                  onChange={(e) => setFollowCurrent(e.target.checked)}
+                  style={{ marginRight: 4 }}
+                />
+                Follow Line
+              </label>
+            </div>
+            <div style={styles.panelScroll}>
               {code.split("\n").map((lineText, index) => {
                 const isCurrent = steps[currentStep]?.line === index + 1;
                 return (
-                  <div
+                  <pre
                     key={index}
+                    ref={(el) => (lineRefs.current[index] = el)}
                     style={{
+                      margin: 0,
+                      whiteSpace: "pre",
                       backgroundColor: isCurrent ? "rgba(255,0,255,0.3)" : "transparent",
-                      padding: "2px",
                       borderRadius: "4px",
+                      padding: "2px 4px",
                     }}
                   >
-                    {lineText}
-                  </div>
+                    {lineText || "\u00A0"}
+                  </pre>
                 );
               })}
             </div>
+
+            {/* Step Slider */}
+            {steps.length > 0 && (
+              <div style={styles.sliderContainer}>
+                <input
+                  type="range"
+                  min={0}
+                  max={steps.length - 1}
+                  value={currentStep}
+                  onChange={(e) => setCurrentStep(Number(e.target.value))}
+                  style={styles.slider}
+                />
+                <div style={styles.sliderLabel}>
+                  Step {currentStep} / {steps.length - 1}
+                </div>
+              </div>
+            )}
           </div>
-          <div style={styles.dragBar} onMouseDown={(e) => startDrag("exec", e)} />
 
           {/* Variables Panel */}
           <div style={{ ...styles.panel, flex: varsFlex }}>
             <h3 style={styles.panelTitle}>Variables</h3>
-            {Object.entries(currentVars).length === 0
-              ? "No variables yet"
-              : Object.entries(currentVars).map(([k, v]) => (
-                  <div key={k}>
-                    <strong>{k}</strong>: {v}
-                  </div>
-                ))}
+            <div style={styles.panelScroll}>
+              {Object.entries(currentVars).length === 0
+                ? "No variables yet"
+                : Object.entries(currentVars).map(([k, v]) => (
+                    <div key={k}>
+                      <strong>{k}</strong>: {v}
+                    </div>
+                  ))}
+            </div>
           </div>
-          <div style={styles.dragBar} onMouseDown={(e) => startDrag("vars", e)} />
 
           {/* Output Panel */}
-          <div style={{ ...styles.panel, flex: outputFlex, color: "#00ff00", whiteSpace: "pre-wrap" }}>
+          <div style={{ ...styles.panel, flex: outputFlex, color: "#00ff00" }}>
             <h3 style={styles.panelTitle}>Output</h3>
-            {accumulatedOutput || "No output yet"}
+            <div style={styles.panelScroll}>
+              {accumulatedOutput
+                ? accumulatedOutput.split("\n").map((line, idx) => (
+                    <div key={idx}>{line}</div>
+                  ))
+                : "No output yet"}
+            </div>
           </div>
         </div>
       </div>
@@ -204,37 +214,19 @@ export default function CodeVisualizer() {
 
 // Styles
 const styles = {
-  container: {
-    height: "100vh",
-    backgroundColor: "#1e1e1e",
-    color: "#f0f0f0",
-    display: "flex",
-    flexDirection: "column",
-  },
+  container: { height: "100vh", backgroundColor: "#1e1e1e", color: "#f0f0f0", display: "flex", flexDirection: "column" },
   header: { padding: "20px" },
   title: { margin: 0, color: "#ff80ff" },
-  main: { flex: 1, display: "flex", gap: "20px", padding: "0 20px 20px 20px" },
-  editorContainer: { flex: 1, position: "relative", display: "flex", flexDirection: "column" },
+  main: { flex: 1, display: "flex", gap: "20px", padding: "0 20px 20px 20px", minHeight: 0 },
+  editorContainer: { flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 },
   controls: { position: "absolute", bottom: "10px", left: "10px", display: "flex", gap: "10px" },
-  button: {
-    padding: "5px 10px",
-    backgroundColor: "#3a3d41",
-    color: "#f0f0f0",
-    border: "1px solid #555",
-    borderRadius: "4px",
-    cursor: "pointer",
-  },
+  button: { padding: "5px 10px", backgroundColor: "#3a3d41", color: "#f0f0f0", border: "1px solid #555", borderRadius: "4px", cursor: "pointer" },
   select: { marginLeft: "10px" },
-  rightPanel: { flex: 1, display: "flex", flexDirection: "column", gap: "5px" },
-  panel: {
-    minHeight: 0,
-    borderRadius: "8px",
-    backgroundColor: "#2d2d2d",
-    padding: "10px",
-    fontFamily: "monospace",
-    overflowY: "auto",
-  },
-  panelTitle: { color: "#ff80ff" },
-  codeLines: { whiteSpace: "pre-wrap" },
-  dragBar: { height: "5px", cursor: "row-resize", backgroundColor: "#555" },
+  rightPanel: { flex: 1, display: "flex", flexDirection: "column", gap: "5px", minHeight: 0 },
+  panel: { borderRadius: "8px", backgroundColor: "#2d2d2d", padding: "10px", fontFamily: "monospace", display: "flex", flexDirection: "column", overflow: "hidden" },
+  panelScroll: { flex: 1, minHeight: 0, overflowY: "auto" },
+  panelTitle: { color: "#ff80ff", marginBottom: "6px" },
+  sliderContainer: { marginTop: "10px", display: "flex", flexDirection: "column", alignItems: "stretch" },
+  slider: { width: "100%" },
+  sliderLabel: { fontSize: "12px", textAlign: "center", marginTop: "4px" },
 };
