@@ -51,24 +51,74 @@ def run_in_process(code: str, conn: multiprocessing.Pipe) -> None:
     # Limit memory (Unix only)
     if platform.system() != "Windows":
         try:
-            resource.setrlimit(resource.RLIMIT_AS, (50 * 1024 * 1024, 50 * 1024 * 1024))  # 50 MB
+            resource.setrlimit(resource.RLIMIT_AS, (50 * 1024 * 1024, 50 * 1024 * 1024))  # 150 MB
         except Exception:
             pass
 
     # Safe built-ins
     safe_builtins = {
-        "range": range,
-        "len": len,
-        "print": lambda *args: print(*args, file=output_buffer),
+        # Basic types & constructors
         "int": int,
         "float": float,
         "str": str,
         "bool": bool,
         "list": list,
         "dict": dict,
+        "set": set,
+        "tuple": tuple,
+        "frozenset": frozenset,
+        "complex": complex,
+        "len": len,
+        "abs": abs,
+
+        # Math & numeric helpers
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "round": round,
+        "pow": pow,
+
+        # Iteration tools
+        "range": range,
         "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "reversed": reversed,
+        "sorted": sorted,
+        "any": any,
+        "all": all,
+        "iter": iter,
+        "next": next,
+
+        # Type & object helpers
+        "isinstance": isinstance,
+        "issubclass": issubclass,
+        "type": type,
+        "id": id,
+        "callable": callable,
+        "super": super,
+
+        # Safe conversions
+        "chr": chr,
+        "ord": ord,
+        "bin": bin,
+        "hex": hex,
+        "oct": oct,
+
+        # Printing (buffered for stacking new outputs)
+        "print": lambda *args: print(*args, file=output_buffer),
+
+        # Required for classes
         "__build_class__": __build_class__,
-        "__name__": __name__
+        "__name__": __name__,
+
+        # Safe exceptions (optional, for raising/catching)
+        "Exception": Exception,
+        "ValueError": ValueError,
+        "TypeError": TypeError,
+        "IndexError": IndexError,
+        "KeyError": KeyError,
     }
 
     # Tracer function
@@ -125,7 +175,7 @@ def run_code(code: str, step: Optional[int] = None) -> CodeResponse:
     parent_conn, child_conn = multiprocessing.Pipe()
     process = multiprocessing.Process(target=run_in_process, args=(code, child_conn))
     process.start()
-    process.join(timeout=4)
+    process.join(timeout=2)
 
     if process.is_alive():
         process.terminate()
